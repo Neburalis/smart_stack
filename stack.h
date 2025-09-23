@@ -27,4 +27,6 @@ STACK_ERRNO StackPop(my_stack_t * stk, stack_element_t * value);
 
 STACK_ERRNO StackDtor(my_stack_t * stk);
 
+void StackDump(my_stack_t * const stk, STACK_ERRNO errno, const char * const reason);
+
 #endif // STACK_H

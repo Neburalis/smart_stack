@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
+#include <malloc/malloc.h>
 #include "stack.h"
 
 // int typedef stack_element_t;
@@ -65,4 +66,19 @@ STACK_ERRNO StackDtor(my_stack_t * const stk) {
     stk->data = NULL;
 
     return STACK_ERRNO::SUCSSESS;
+}
+
+void StackDump(my_stack_t * const stk, STACK_ERRNO errno, const char * const reason) {
+    assert(stk != NULL);
+
+    printf("stack at %p\n", stk);
+    printf("reason is %s\n", reason);
+    printf("{\n"
+           "\tsize = %zu\n"
+           "\tcapacity = %zu\n"
+           "\tdata[%zu] at %p\n\t{\n", stk->size, stk->capacity, malloc_size(stk->data), stk->data);
+    for(size_t i = 0; i < malloc_size(stk->data)/sizeof(stack_element_t); ++i){
+        printf("\t\t%c[%zu] = %d\n", i<stk->size?'*':' ', i, stk->data[i]);
+    }
+    printf("\t}\n}\n");
 }
