@@ -22,6 +22,7 @@ enum {
     DATABUF_SIZE_NOT_MATCH_CAPACITY = 7,
     CORRUPT_POISON                  = 8,
     POISON_COLLISION                = 9,
+    CORRUPT_CANARY                  = 10,
 } typedef STACK_ERRNO;
 
 #define StackDump(stk, stk_errno, reason) \

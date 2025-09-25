@@ -68,6 +68,9 @@ my_stack_t * StackCtor(size_t capacity, STACK_ERRNO * stk_errno) {
         return NULL;
     }
 
+    stk->canary1 = CANARY1;
+    stk->canary2 = CANARY2;
+
     capacity = cpl2(capacity);
     stk->capacity = capacity;
 
@@ -78,7 +81,8 @@ my_stack_t * StackCtor(size_t capacity, STACK_ERRNO * stk_errno) {
     }
     stk->size = 0;
 
-    for (size_t i = 0; i < capacity; ++i) {
+    for (size_t i = 0; i < malloc_size(stk->data) / sizeof(stack_element_t); ++i) {
+        // calloc может выделить больше памяти чем попросили. Заполняем poison'ом ВСЕ
         stk->data[i] = POISON;
     }
 
@@ -142,19 +146,29 @@ const char * StackError(STACK_ERRNO stk_errno) {
         case STACK_ERRNO::SIZE_BIGGER_THAN_CAPACITY:        return "Stack size exceeds capacity (corruption?)";
         case STACK_ERRNO::STACK_OVERFLOW:                   return "Trying to push into filled stack";
         case STACK_ERRNO::DATABUF_SIZE_NOT_MATCH_CAPACITY:  return "Size of databuf malloc section dont't match capacity of stack";
-        case STACK_ERRNO::CORRUPT_POISON:                   return "Poison in empty part of stack is damaged";
+        case STACK_ERRNO::CORRUPT_POISON:                   return "Not Poison in empty part => stack is damaged";
         case STACK_ERRNO::POISON_COLLISION:                 return "Trying to insert poison. Use another value";
+        case STACK_ERRNO::CORRUPT_CANARY:                   return "Canary is spoiled => stack is damaged";
         default:                                            return "Unknown stack error";
     }
 }
 
 STACK_ERRNO StackValidator(my_stack_t * const stk) {
-    if (stk == NULL)                                            return STACK_ERRNO::NULL_PTR_PASSED;
-    if (stk->data == NULL)                                      return STACK_ERRNO::STACK_DATA_IS_NULL_PTR;
-    if (stk->size > stk->capacity)                              return STACK_ERRNO::SIZE_BIGGER_THAN_CAPACITY;
-    if (stk->size < 0 || stk->capacity <= 0)                    return STACK_ERRNO::STACK_OVERFLOW;
+    if (stk == NULL) // Стек - nullptr
+        return STACK_ERRNO::NULL_PTR_PASSED;
+    if (stk->canary1 != CANARY1 || stk->canary2 != CANARY2)
+        return STACK_ERRNO::CORRUPT_CANARY;
+    if (stk->data == NULL) // Динамический массив - не создан
+        return STACK_ERRNO::STACK_DATA_IS_NULL_PTR;
+    if (stk->size > stk->capacity) // Количество элементов в стеке больше чем его вместимость
+        return STACK_ERRNO::SIZE_BIGGER_THAN_CAPACITY;
     size_t total_slots = malloc_size(stk->data) / sizeof(stack_element_t);
-    if (total_slots < stk->capacity)                            return STACK_ERRNO::DATABUF_SIZE_NOT_MATCH_CAPACITY;
+    if (total_slots < stk->capacity) // Размер динамической памяти меньше вместимости
+        return STACK_ERRNO::DATABUF_SIZE_NOT_MATCH_CAPACITY;
+    for (size_t i = stk->size; i < total_slots; ++i) {
+        if (stk->data[i] != POISON)
+            return STACK_ERRNO::CORRUPT_POISON;
+    }
     return STACK_ERRNO::SUCSSESS;
 }
 
