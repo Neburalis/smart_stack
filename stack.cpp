@@ -35,11 +35,11 @@ struct my_stack{
 //     POISON_COLLISION                = 9,
 // } typedef STACK_ERRNO;
 
-#define POISON  0x96716f66
-#define CANARY1 0xDED0AFFF
-#define CANARY2 0xEDA0FAAA
-#define CANARY3 0xDED00EDA
-#define CANARY4 0xABCD1234
+#define POISON  (stack_element_t) 0x96716f66
+#define CANARY1 (stack_element_t) 0xDED0AFFF
+#define CANARY2 (stack_element_t) 0xEDA0FAAA
+#define CANARY3 (stack_element_t) 0xDED00EDA
+#define CANARY4 (stack_element_t) 0xABCD1234
 
 #define StackValidate()                                             \
     begin {                                                         \
@@ -236,11 +236,11 @@ void StackDump_impl(my_stack_t * const stk, STACK_ERRNO stk_errno, const char * 
         size_t total_slots = actual_bytes / sizeof(stack_element_t);
         for(size_t i = 0; i < total_slots; ++i){
             if (i < stk->size) {
-                printf("\t\t" BRIGHT_GREEN("*") BRIGHT_YELLOW("[%zu]") " = " BRIGHT_WHITE("%d") " [%#X]\n", i, stk->data[i], stk->data[i]);
+                printf("\t\t" BRIGHT_GREEN("*") BRIGHT_YELLOW("[%zu]") " = " BRIGHT_WHITE("%d") " [%#X]\n", i, stk->data[i], (unsigned) stk->data[i]);
             } else if (i < stk->capacity) {
-                printf("\t\t" YELLOW(" ") YELLOW("[%zu]") " = " YELLOW("%d") " [%#X] " BRIGHT_BLACK("(POISON)\n"), i, stk->data[i], stk->data[i]);
+                printf("\t\t" YELLOW(" ") YELLOW("[%zu]") " = " YELLOW("%d") " [%#X] " BRIGHT_BLACK("(POISON)\n"), i, stk->data[i], (unsigned) stk->data[i]);
             } else {
-                printf("\t\t" BRIGHT_BLACK(" ") BRIGHT_BLACK("[%zu]") " = " BRIGHT_BLACK("%d") " [%#X] " BRIGHT_BLACK("(padding)\n"), i, stk->data[i], stk->data[i]);
+                printf("\t\t" BRIGHT_BLACK(" ") BRIGHT_BLACK("[%zu]") " = " BRIGHT_BLACK("%d") " [%#X] " BRIGHT_BLACK("(padding)\n"), i, stk->data[i], (unsigned) stk->data[i]);
             }
         }
     }
