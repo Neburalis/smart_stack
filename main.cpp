@@ -3,9 +3,16 @@
 #include <limits.h>
 
 #include "stack.h"
+#include "ansi.h"
 
 #define begin do
 #define end while(0) // Это не цикл. Just блок в котором можно break и continue
+
+#define DO(code) {\
+    fprintf(stderr, BRIGHT_CYAN("%s:%d %s() >>> " #code "\n"), __FILE__, __LINE__, __func__);\
+    { code; }                           \
+    StackDump(stk1, stk_errno, #code);  \
+    }
 
 int main() {
     begin {
@@ -13,27 +20,21 @@ int main() {
         my_stack_t *stk1 = StackCtor(4, &stk_errno);
         if (stk_errno != STACK_ERRNO::SUCSSESS) break; // Не удалось создать стек -> прекращаем дальнейшее исполнение
 
-        stk_errno = StackPush(stk1, 10);
-        StackDump(stk1, stk_errno, "just dump from main");
-        stk_errno = StackPush(stk1, 20);
-        StackDump(stk1, stk_errno, "just dump from main");
-        stk_errno = StackPush(stk1, 30);
-        StackDump(stk1, stk_errno, "just dump from main");
+        DO(stk_errno = StackPush(stk1, 10);)
+        DO(stk_errno = StackPush(stk1, 20);)
+        DO(stk_errno = StackPush(stk1, 30);)
 
         stack_element_t value;
 
-        StackPop(stk1, &value);
+        DO(stk_errno = StackPop(stk1, &value);)
         printf("%d\n", value);
 
-        stk_errno = StackPush(stk1, 40);
-        StackDump(stk1, stk_errno, "just dump from main");
-        stk_errno = StackPush(stk1, 0x96716f66);
-        StackDump(stk1, stk_errno, "just dump from main");
+        DO(stk_errno = StackPush(stk1, 40);)
+
+        DO(stk_errno = StackPush(stk1, (int) 0x96716f66);)
         // POISON COLLISION - ERROR
-        stk_errno = StackPush(stk1, 50);
-        StackDump(stk1, stk_errno, "just dump from main");
-        stk_errno = StackPush(stk1, INT_MAX);
-        StackDump(stk1, stk_errno, "just dump from main");
+        DO(stk_errno = StackPush(stk1, 50);)
+        DO(stk_errno = StackPush(stk1, INT_MAX);)
 
         for(;;){
             if ((stk_errno = StackPop(stk1, &value)) == STACK_ERRNO::SUCSSESS) {
