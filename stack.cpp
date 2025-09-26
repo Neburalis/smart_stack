@@ -75,7 +75,7 @@ unsigned long long sdbm(void * void_data, size_t max_len) {
         // printf("%max_len = %zu\t", max_len);
         // printf("hash = %lld\t", hash);
         // printf("c = %d\n", c);
-        hash = c + (hash << 16) + (hash << 6) - hash;
+        hash = (unsigned long long) c + (hash << 16) + (hash << 6) - hash;
     }
     return hash;
 }
@@ -286,8 +286,8 @@ void StackDump_impl(my_stack_t * const stk, STACK_ERRNO stk_errno, const char * 
     }
     printf(")\n");
 
-    printf("\thash        = " BRIGHT_WHITE("%lld") " [%#x]\n", stk->hash, stk->hash);
-    printf("\tdata_hash   = " BRIGHT_WHITE("%lld") " [%#x]\n", stk->data_hash, stk->data_hash);
+    printf("\thash        = " BRIGHT_WHITE("%zu") " [%#zx]\n", stk->hash, stk->hash);
+    printf("\tdata_hash   = " BRIGHT_WHITE("%zu") " [%#zx]\n", stk->data_hash, stk->data_hash);
 
     // Вывод data
     if (stk->data == NULL) {
