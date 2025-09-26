@@ -17,6 +17,7 @@ enum {
     CORRUPT_POISON                  = 8,
     POISON_COLLISION                = 9,
     CORRUPT_CANARY                  = 10,
+    CORRUPT_HASH                    = 11,
 } typedef STACK_ERRNO;
 
 #define StackDump(stk, stk_errno, reason) \

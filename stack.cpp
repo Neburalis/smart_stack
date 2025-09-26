@@ -13,11 +13,13 @@
 #define end while(0)
 
 // int typedef stack_element_t;
-
+// TODO - условная компиляция
+// TODO хэш массива
 struct my_stack {
     int                 canary1;
     size_t              size;
     size_t              capacity;
+    size_t              hash;
     stack_element_t *   data;
     int                 canary2;
 };
@@ -34,6 +36,7 @@ struct my_stack {
 //     CORRUPT_POISON                  = 8,
 //     POISON_COLLISION                = 9,
 //     CORRUPT_CANARY                  = 10,
+//     CORRUPT_HASH                    = 11,
 // } typedef STACK_ERRNO;
 
 #define POISON  (stack_element_t) 0x96716f66
@@ -65,9 +68,9 @@ used in berkeley db (see sleepycat) and elsewhere.
 unsigned long long sdbm(void * void_data, size_t max_len) {
     char * data = (char *) void_data;
     unsigned long long hash = 0;
-    int c;
     // printf("%s\n", data);
-    while ((c = *data++) && max_len-- > 0) {
+    while (max_len-- > 0) {
+        char c = *data++;
         // printf("%max_len = %zu\t", max_len);
         // printf("hash = %lld\t", hash);
         // printf("c = %d\n", c);
@@ -117,6 +120,9 @@ my_stack_t * StackCtor(size_t capacity, STACK_ERRNO * stk_errno) {
     stk->data[0] = CANARY3;
     stk->data[capacity - 1] = CANARY4;
 
+    stk->hash = 0;
+    stk->hash = sdbm(stk, sizeof(my_stack_t));
+
     *stk_errno = StackValidator(stk);
     if (*stk_errno != STACK_ERRNO::SUCSSESS) {
         free(stk);
@@ -138,6 +144,8 @@ STACK_ERRNO StackPush(my_stack_t * const stk, stack_element_t value) {
         return STACK_OVERFLOW;
     }
     stk->data[stk->size++] = value;
+    stk->hash = 0;
+    stk->hash = sdbm(stk, sizeof(my_stack_t));
 
     StackValidate();
     return STACK_ERRNO::SUCSSESS;
@@ -146,10 +154,12 @@ STACK_ERRNO StackPush(my_stack_t * const stk, stack_element_t value) {
 STACK_ERRNO StackPop(my_stack_t * const stk, stack_element_t * value) {
     StackValidate();
 
-    if (stk->size == 0) return STACK_ERRNO::STACK_EMPTY;
+    if (stk->size == 1) return STACK_ERRNO::STACK_EMPTY;
     *value = stk->data[--stk->size];
 
     stk->data[stk->size] = POISON;
+    stk->hash = 0;
+    stk->hash = sdbm(stk, sizeof(my_stack_t));
 
     StackValidate();
     return STACK_ERRNO::SUCSSESS;
@@ -157,7 +167,7 @@ STACK_ERRNO StackPop(my_stack_t * const stk, stack_element_t * value) {
 
 STACK_ERRNO StackDtor(my_stack_t * stk) {
     StackValidate();
-
+    // TODO: засрать стек
     free(stk->data);
     stk->data = NULL;
 
@@ -180,6 +190,7 @@ const char * StackError(STACK_ERRNO stk_errno) {
         case STACK_ERRNO::CORRUPT_POISON:                   return "Not Poison in empty part => stack is damaged";
         case STACK_ERRNO::POISON_COLLISION:                 return "Trying to insert poison. Use another value";
         case STACK_ERRNO::CORRUPT_CANARY:                   return "Canary is spoiled => stack is damaged";
+        case STACK_ERRNO::CORRUPT_HASH:                     return "Hash is spoiled => stack is damaged";
         default:                                            return "Unknown stack error";
     }
 }
@@ -204,6 +215,15 @@ STACK_ERRNO StackValidator(my_stack_t * const stk) {
         if (stk->data[i] != POISON)
             return STACK_ERRNO::CORRUPT_POISON;
     }
+    uint64_t old_hash = stk->hash;
+    stk->hash = 0;
+    uint64_t now_hash = sdbm(stk, sizeof(my_stack_t));
+    if (now_hash != old_hash) {
+        // printf("now_hash is " BRIGHT_WHITE("%lld") " [%#x] old_hash is " BRIGHT_WHITE("%lld") " [%#x]\n", now_hash, now_hash, old_hash, old_hash);
+        stk->hash = old_hash;
+        return STACK_ERRNO::CORRUPT_HASH;
+    }
+    stk->hash = old_hash;
     return STACK_ERRNO::SUCSSESS;
 }
 
@@ -239,18 +259,20 @@ void StackDump_impl(my_stack_t * const stk, STACK_ERRNO stk_errno, const char * 
     printf("\tleft_canary = %d [%#x] " BRIGHT_GREEN("(CANARY)\n"), stk->canary1, (unsigned) stk->canary1);
     // Вывод capacity
     if (stk->data != NULL && actual_bytes != expected_bytes) {
-        printf("\tcapacity  = " BRIGHT_WHITE("%zu") " (expected " CYAN("%zu bytes") ")\n", stk->capacity, expected_bytes);
+        printf("\tcapacity    = " BRIGHT_WHITE("%zu") " (expected " CYAN("%zu bytes") ")\n", stk->capacity, expected_bytes);
     } else {
-        printf("\tcapacity  = " BRIGHT_WHITE("%zu") "\n", stk->capacity);
+        printf("\tcapacity    = " BRIGHT_WHITE("%zu") "\n", stk->capacity);
     }
 
-    printf("\tsize      = " BRIGHT_WHITE("%zu") " (last element index = ", stk->size);
+    printf("\tsize        = " BRIGHT_WHITE("%zu") " (last element index = ", stk->size);
     if (stk->size == 0) {
         printf(BRIGHT_RED("NONE"));
     } else {
         printf(BRIGHT_YELLOW("%zu"), stk->size - 1);
     }
     printf(")\n");
+
+    printf("\thash        = " BRIGHT_WHITE("%lld") " [%#x]\n", stk->hash, stk->hash);
 
     // Вывод data
     if (stk->data == NULL) {
@@ -269,14 +291,14 @@ void StackDump_impl(my_stack_t * const stk, STACK_ERRNO stk_errno, const char * 
         printf("\t\t" BRIGHT_RED("DATA IS NULL POINTER!\n"));
     } else {
         size_t total_slots = actual_bytes / sizeof(stack_element_t);
-        printf("\t\t" YELLOW(" ") YELLOW("[0]") " = " YELLOW("%d") " [%#x] " BRIGHT_GREEN("(CANARY)\n"), stk->data[0], (unsigned) stk->data[0]);
+        printf("\t\t" YELLOW(" ") BRIGHT_GREEN("[0]") " = " YELLOW("%d") " [%#x] " BRIGHT_GREEN("(CANARY)\n"), stk->data[0], (unsigned) stk->data[0]);
         for(size_t i = 1; i < total_slots; ++i){
             if (i < stk->size) {
                 printf("\t\t" BRIGHT_GREEN("*") BRIGHT_YELLOW("[%zu]") " = " BRIGHT_WHITE("%d") " [%#x]\n", i, stk->data[i], (unsigned) stk->data[i]);
             } else if (i < stk->capacity - 1) {
                 printf("\t\t" YELLOW(" ") YELLOW("[%zu]") " = " YELLOW("%d") " [%#x] " BRIGHT_BLACK("(POISON)\n"), i, stk->data[i], (unsigned) stk->data[i]);
             } else if (i == stk->capacity -1) {
-                printf("\t\t" YELLOW(" ") YELLOW("[%zu]") " = " YELLOW("%d") " [%#x] " BRIGHT_GREEN("(CANARY)\n"), i, stk->data[i], (unsigned) stk->data[i]);
+                printf("\t\t" YELLOW(" ") BRIGHT_GREEN("[%zu]") " = " YELLOW("%d") " [%#x] " BRIGHT_GREEN("(CANARY)\n"), i, stk->data[i], (unsigned) stk->data[i]);
             } else {
                 printf("\t\t" BRIGHT_BLACK(" ") BRIGHT_BLACK("[%zu]") " = " BRIGHT_BLACK("%d") " [%#x] " BRIGHT_BLACK("(padding)\n"), i, stk->data[i], (unsigned) stk->data[i]);
             }
