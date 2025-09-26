@@ -14,7 +14,7 @@
 
 // int typedef stack_element_t;
 // TODO - условная компиляция
-// TODO хэш массива
+
 struct my_stack {
     int                 canary1;
     size_t              size;
@@ -75,7 +75,7 @@ unsigned long long sdbm(void * void_data, size_t max_len) {
         // printf("%max_len = %zu\t", max_len);
         // printf("hash = %lld\t", hash);
         // printf("c = %d\n", c);
-        hash = (unsigned long long) c + (hash << 16) + (hash << 6) - hash;
+        hash += c;
     }
     return hash;
 }
@@ -176,12 +176,9 @@ STACK_ERRNO StackPop(my_stack_t * const stk, stack_element_t * value) {
 
 STACK_ERRNO StackDtor(my_stack_t * stk) {
     StackValidate();
-    // TODO: засрать стек
-    free(stk->data);
-    stk->data = NULL;
 
+    free(stk->data);
     free(stk);
-    stk = NULL;
 
     return STACK_ERRNO::SUCSSESS;
 }
