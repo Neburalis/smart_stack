@@ -3,12 +3,6 @@
 
 int typedef stack_element_t;
 
-// struct {
-//     size_t              size;
-//     size_t              capacity;
-//     stack_element_t *   data;
-// } typedef my_stack_t;
-
 typedef struct my_stack my_stack_t;
 
 enum {
@@ -27,6 +21,19 @@ enum {
 
 #define StackDump(stk, stk_errno, reason) \
     StackDump_impl(stk, stk_errno, reason, __FILE__, __LINE__, __PRETTY_FUNCTION__)
+
+/*
+this algorithm was created for sdbm (a public-domain reimplementation of ndbm) database library.
+it was found to do well in scrambling bits, causing better distribution of the keys and fewer splits.
+it also happens to be a good general hashing function with good distribution.
+the actual function is hash(i) = hash(i - 1) * 65599 + str[i];
+what is included below is the faster version used in gawk.
+[there is even a faster, duff-device version]
+the magic prime constant 65599 (2^6 + 2^16 - 1) was picked out of thin air
+while experimenting with many different constants. this is one of the algorithms
+used in berkeley db (see sleepycat) and elsewhere.
+*/
+unsigned long long sdbm(char * data, size_t max_len);
 
 // Нахождение ближайшей степени 2 >= x
 size_t cpl2(size_t x);

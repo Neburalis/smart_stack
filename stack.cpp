@@ -14,7 +14,7 @@
 
 // int typedef stack_element_t;
 
-struct my_stack{
+struct my_stack {
     int                 canary1;
     size_t              size;
     size_t              capacity;
@@ -33,6 +33,7 @@ struct my_stack{
 //     DATABUF_SIZE_NOT_MATCH_CAPACITY = 7,
 //     CORRUPT_POISON                  = 8,
 //     POISON_COLLISION                = 9,
+//     CORRUPT_CANARY                  = 10,
 // } typedef STACK_ERRNO;
 
 #define POISON  (stack_element_t) 0x96716f66
@@ -49,6 +50,31 @@ struct my_stack{
             return stk_errno;                                       \
         }                                                           \
     } end;
+
+/*
+this algorithm was created for sdbm (a public-domain reimplementation of ndbm) database library.
+it was found to do well in scrambling bits, causing better distribution of the keys and fewer splits.
+it also happens to be a good general hashing function with good distribution.
+the actual function is hash(i) = hash(i - 1) * 65599 + str[i];
+what is included below is the faster version used in gawk.
+[there is even a faster, duff-device version]
+the magic prime constant 65599 (2^6 + 2^16 - 1) was picked out of thin air
+while experimenting with many different constants. this is one of the algorithms
+used in berkeley db (see sleepycat) and elsewhere.
+*/
+unsigned long long sdbm(void * void_data, size_t max_len) {
+    char * data = (char *) void_data;
+    unsigned long long hash = 0;
+    int c;
+    // printf("%s\n", data);
+    while ((c = *data++) && max_len-- > 0) {
+        // printf("%max_len = %zu\t", max_len);
+        // printf("hash = %lld\t", hash);
+        // printf("c = %d\n", c);
+        hash = c + (hash << 16) + (hash << 6) - hash;
+    }
+    return hash;
+}
 
 // Нахождение ближайшей степени 2 >= x
 size_t cpl2(size_t x) {
@@ -71,6 +97,7 @@ my_stack_t * StackCtor(size_t capacity, STACK_ERRNO * stk_errno) {
     stk->canary1 = CANARY1;
     stk->canary2 = CANARY2;
 
+    capacity += 2; // Добавляем место для canary
     capacity = cpl2(capacity);
     stk->capacity = capacity;
 
@@ -79,12 +106,16 @@ my_stack_t * StackCtor(size_t capacity, STACK_ERRNO * stk_errno) {
         *stk_errno = STACK_ERRNO::CANNOT_ALLOCATE_MEMORY;
         return NULL;
     }
-    stk->size = 0;
+    stk->size = 1; // Потому что в 0 лежит canary
 
-    for (size_t i = 0; i < malloc_size(stk->data) / sizeof(stack_element_t); ++i) {
+    size_t total_slots = malloc_size(stk->data) / sizeof(stack_element_t);
+    for (size_t i = 1; i < total_slots - 1; ++i) {
         // calloc может выделить больше памяти чем попросили. Заполняем poison'ом ВСЕ
         stk->data[i] = POISON;
     }
+
+    stk->data[0] = CANARY3;
+    stk->data[capacity - 1] = CANARY4;
 
     *stk_errno = StackValidator(stk);
     if (*stk_errno != STACK_ERRNO::SUCSSESS) {
@@ -156,7 +187,7 @@ const char * StackError(STACK_ERRNO stk_errno) {
 STACK_ERRNO StackValidator(my_stack_t * const stk) {
     if (stk == NULL) // Стек - nullptr
         return STACK_ERRNO::NULL_PTR_PASSED;
-    if (stk->canary1 != CANARY1 || stk->canary2 != CANARY2)
+    if (stk->canary1 != CANARY1 || stk->canary2 != CANARY2) // Одна из канареек в структуре была испорчена
         return STACK_ERRNO::CORRUPT_CANARY;
     if (stk->data == NULL) // Динамический массив - не создан
         return STACK_ERRNO::STACK_DATA_IS_NULL_PTR;
@@ -165,7 +196,11 @@ STACK_ERRNO StackValidator(my_stack_t * const stk) {
     size_t total_slots = malloc_size(stk->data) / sizeof(stack_element_t);
     if (total_slots < stk->capacity) // Размер динамической памяти меньше вместимости
         return STACK_ERRNO::DATABUF_SIZE_NOT_MATCH_CAPACITY;
-    for (size_t i = stk->size; i < total_slots; ++i) {
+    if (stk->data[0] != CANARY3 || stk->data[stk->capacity - 1] != CANARY4) {
+        // Одна из канареек в массиве была испорчена
+        return STACK_ERRNO::CORRUPT_CANARY;
+    }
+    for (size_t i = stk->size; i < stk->capacity - 1; ++i) {
         if (stk->data[i] != POISON)
             return STACK_ERRNO::CORRUPT_POISON;
     }
@@ -201,7 +236,7 @@ void StackDump_impl(my_stack_t * const stk, STACK_ERRNO stk_errno, const char * 
     if (stk->data != NULL) {
         actual_bytes = malloc_size(stk->data);
     }
-
+    printf("\tleft_canary = %d [%#x] " BRIGHT_GREEN("(CANARY)\n"), stk->canary1, (unsigned) stk->canary1);
     // Вывод capacity
     if (stk->data != NULL && actual_bytes != expected_bytes) {
         printf("\tcapacity  = " BRIGHT_WHITE("%zu") " (expected " CYAN("%zu bytes") ")\n", stk->capacity, expected_bytes);
@@ -234,17 +269,22 @@ void StackDump_impl(my_stack_t * const stk, STACK_ERRNO stk_errno, const char * 
         printf("\t\t" BRIGHT_RED("DATA IS NULL POINTER!\n"));
     } else {
         size_t total_slots = actual_bytes / sizeof(stack_element_t);
-        for(size_t i = 0; i < total_slots; ++i){
+        printf("\t\t" YELLOW(" ") YELLOW("[0]") " = " YELLOW("%d") " [%#x] " BRIGHT_GREEN("(CANARY)\n"), stk->data[0], (unsigned) stk->data[0]);
+        for(size_t i = 1; i < total_slots; ++i){
             if (i < stk->size) {
-                printf("\t\t" BRIGHT_GREEN("*") BRIGHT_YELLOW("[%zu]") " = " BRIGHT_WHITE("%d") " [%#X]\n", i, stk->data[i], (unsigned) stk->data[i]);
-            } else if (i < stk->capacity) {
-                printf("\t\t" YELLOW(" ") YELLOW("[%zu]") " = " YELLOW("%d") " [%#X] " BRIGHT_BLACK("(POISON)\n"), i, stk->data[i], (unsigned) stk->data[i]);
+                printf("\t\t" BRIGHT_GREEN("*") BRIGHT_YELLOW("[%zu]") " = " BRIGHT_WHITE("%d") " [%#x]\n", i, stk->data[i], (unsigned) stk->data[i]);
+            } else if (i < stk->capacity - 1) {
+                printf("\t\t" YELLOW(" ") YELLOW("[%zu]") " = " YELLOW("%d") " [%#x] " BRIGHT_BLACK("(POISON)\n"), i, stk->data[i], (unsigned) stk->data[i]);
+            } else if (i == stk->capacity -1) {
+                printf("\t\t" YELLOW(" ") YELLOW("[%zu]") " = " YELLOW("%d") " [%#x] " BRIGHT_GREEN("(CANARY)\n"), i, stk->data[i], (unsigned) stk->data[i]);
             } else {
-                printf("\t\t" BRIGHT_BLACK(" ") BRIGHT_BLACK("[%zu]") " = " BRIGHT_BLACK("%d") " [%#X] " BRIGHT_BLACK("(padding)\n"), i, stk->data[i], (unsigned) stk->data[i]);
+                printf("\t\t" BRIGHT_BLACK(" ") BRIGHT_BLACK("[%zu]") " = " BRIGHT_BLACK("%d") " [%#x] " BRIGHT_BLACK("(padding)\n"), i, stk->data[i], (unsigned) stk->data[i]);
             }
         }
     }
 
-    printf("\t}\n}\n");
+    printf("\t}\n");
+    printf("\tright_canary = %d [%#x] " BRIGHT_GREEN("(CANARY)\n"), stk->canary2, (unsigned) stk->canary2);
+    printf("}\n");
     printf("================================================\n\n");
 }
