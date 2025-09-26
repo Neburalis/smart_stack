@@ -92,6 +92,9 @@ size_t cpl2(size_t x) {
 }
 
 my_stack_t * StackCtor(size_t capacity, STACK_ERRNO * stk_errno) {
+    if (stk_errno == NULL)
+        return NULL;
+
     my_stack_t * stk = (my_stack_t *) calloc(1, sizeof(my_stack_t));
     if (stk == NULL) {
         *stk_errno = STACK_ERRNO::CANNOT_ALLOCATE_MEMORY;
@@ -159,8 +162,11 @@ STACK_ERRNO StackPush(my_stack_t * const stk, stack_element_t value) {
 
 STACK_ERRNO StackPop(my_stack_t * const stk, stack_element_t * value) {
     StackValidate();
+    if (value == NULL)
+        return STACK_ERRNO::NULL_PTR_PASSED;
 
-    if (stk->size == 1) return STACK_ERRNO::STACK_EMPTY;
+    if (stk->size == 1)
+        return STACK_ERRNO::STACK_EMPTY;
     *value = stk->data[--stk->size];
 
     stk->data[stk->size] = POISON;
@@ -239,7 +245,12 @@ STACK_ERRNO StackValidator(my_stack_t * const stk) {
 }
 
 void StackDump_impl(my_stack_t * const stk, STACK_ERRNO stk_errno, const char * const reason,
-        const char *file, int line, const char *func) {
+        const char * file, int line, const char * func) {
+    assert(stk      != NULL);
+    assert(reason   != NULL);
+    assert(file     != NULL);
+    assert(func     != NULL);
+
     printf("================== " BRIGHT_WHITE("STACK DUMP") " ==================\n");
     printf("called from " BRIGHT_BLUE("%s:%d") " in function " BRIGHT_BLUE("%s") "\n", file, line, func);
 
