@@ -20,6 +20,7 @@ struct my_stack {
     size_t              size;
     size_t              capacity;
     size_t              hash;
+    size_t              data_hash;
     stack_element_t *   data;
     int                 canary2;
 };
@@ -120,6 +121,8 @@ my_stack_t * StackCtor(size_t capacity, STACK_ERRNO * stk_errno) {
     stk->data[0] = CANARY3;
     stk->data[capacity - 1] = CANARY4;
 
+    stk->data_hash = sdbm(stk->data, stk->capacity);
+
     stk->hash = 0;
     stk->hash = sdbm(stk, sizeof(my_stack_t));
 
@@ -144,6 +147,9 @@ STACK_ERRNO StackPush(my_stack_t * const stk, stack_element_t value) {
         return STACK_OVERFLOW;
     }
     stk->data[stk->size++] = value;
+
+    stk->data_hash = sdbm(stk->data, stk->capacity);
+
     stk->hash = 0;
     stk->hash = sdbm(stk, sizeof(my_stack_t));
 
@@ -158,6 +164,9 @@ STACK_ERRNO StackPop(my_stack_t * const stk, stack_element_t * value) {
     *value = stk->data[--stk->size];
 
     stk->data[stk->size] = POISON;
+
+    stk->data_hash = sdbm(stk->data, stk->capacity);
+
     stk->hash = 0;
     stk->hash = sdbm(stk, sizeof(my_stack_t));
 
@@ -215,6 +224,11 @@ STACK_ERRNO StackValidator(my_stack_t * const stk) {
         if (stk->data[i] != POISON)
             return STACK_ERRNO::CORRUPT_POISON;
     }
+    if (stk->data_hash != sdbm(stk->data, stk->capacity)) {
+        // Хеш массива не совпадает с сохраненным хешем массива
+        return STACK_ERRNO::CORRUPT_HASH;
+    }
+
     uint64_t old_hash = stk->hash;
     stk->hash = 0;
     uint64_t now_hash = sdbm(stk, sizeof(my_stack_t));
@@ -273,6 +287,7 @@ void StackDump_impl(my_stack_t * const stk, STACK_ERRNO stk_errno, const char * 
     printf(")\n");
 
     printf("\thash        = " BRIGHT_WHITE("%lld") " [%#x]\n", stk->hash, stk->hash);
+    printf("\tdata_hash   = " BRIGHT_WHITE("%lld") " [%#x]\n", stk->data_hash, stk->data_hash);
 
     // Вывод data
     if (stk->data == NULL) {

@@ -18,6 +18,7 @@ int main() {
     begin {
         STACK_ERRNO stk_errno = STACK_ERRNO::SUCSSESS;
         my_stack_t *stk1 = StackCtor(4, &stk_errno);
+        fprintf(stderr, "errno is %d", stk_errno);
         if (stk_errno != STACK_ERRNO::SUCSSESS) break; // Не удалось создать стек -> прекращаем дальнейшее исполнение
 
         DO(stk_errno = StackPush(stk1, 10);)
