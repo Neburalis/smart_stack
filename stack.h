@@ -18,8 +18,10 @@ enum {
     DATABUF_SIZE_NOT_MATCH_CAPACITY = 7,
     CORRUPT_POISON                  = 8,
     POISON_COLLISION                = 9,
-    T1(CORRUPT_CANARY               = 10,)
-    T3(CORRUPT_HASH                 = 11,)
+    WRONG_REALLOC_SIZE              = 10,
+    T1(CORRUPT_CANARY               = 11,)
+    T3(CORRUPT_HASH                 = 12,)
+    CANNOT_REALLOCATE_MEMORY        = 13,
 } typedef STACK_ERRNO;
 
 #define StackDump(stk, stk_errno, reason) \
@@ -30,6 +32,8 @@ my_stack_t * StackCtor(size_t capacity, STACK_ERRNO * stk_errno);
 STACK_ERRNO StackPush(my_stack_t * stk, stack_element_t value);
 
 STACK_ERRNO StackPop(my_stack_t * stk, stack_element_t * value);
+
+STACK_ERRNO StackRealloc(my_stack_t * const stk, size_t new_size);
 
 STACK_ERRNO StackDtor(my_stack_t * stk);
 

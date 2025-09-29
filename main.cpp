@@ -21,26 +21,34 @@ int main() {
         fprintf(stderr, "errno is %d", stk_errno);
         if (stk_errno != STACK_ERRNO::SUCSSESS) break; // Не удалось создать стек -> прекращаем дальнейшее исполнение
 
-        DO(stk_errno = StackPush(stk1, 10);)
-        DO(stk_errno = StackPush(stk1, 20);)
-        DO(stk_errno = StackPush(stk1, 30);)
+        DO(stk_errno = StackPush(stk1, 10));
+        DO(stk_errno = StackPush(stk1, 20));
+        DO(stk_errno = StackPush(stk1, 30));
 
         stack_element_t value;
 
-        DO(stk_errno = StackPop(stk1, &value);)
+        DO(stk_errno = StackPop(stk1, &value));
         printf("%d\n", value);
 
-        DO(stk_errno = StackPush(stk1, 40);)
+        DO(stk_errno = StackPush(stk1, 40));
 
-        DO(stk_errno = StackPush(stk1, (int) 0x96716f66);)
+        DO(stk_errno = StackPush(stk1, (int) 0x96716f66));
         // POISON COLLISION - ERROR
-        DO(stk_errno = StackPush(stk1, 50);)
-        DO(stk_errno = StackPush(stk1, INT_MAX);)
+        DO(stk_errno = StackPush(stk1, 50));
+        do {
+            DO(stk_errno = StackPush(stk1, INT_MAX));
+            if (stk_errno == SUCSSESS)
+                break;
+            else
+                DO(StackRealloc(stk1, 15));
+        } while (1);
+
+        DO(StackPop(stk1, &value));
+        DO(StackRealloc(stk1, 10));
 
         for(;;){
             if ((stk_errno = StackPop(stk1, &value)) == STACK_ERRNO::SUCSSESS) {
-                StackDump(stk1, stk_errno, "");
-                printf("%d\n", value);
+                StackDump(stk1, stk_errno, "for (;;) StackPop(...);");
             } else
                 break;
         }
