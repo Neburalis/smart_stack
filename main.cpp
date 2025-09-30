@@ -2,11 +2,17 @@
 #include <stdlib.h>
 #include <limits.h>
 
+#include "stack_errno.h"
 #include "stack.h"
 #include "ansi.h"
 
 #define begin do
 #define end while(0) // Это не цикл. Just блок в котором можно break и continue
+
+// TODO - условная компиляция
+// TODO - раздельное включение защит
+// TODO калькулятор
+// TODO возвращать индекс в массиве (хэндлеры)
 
 #define DO(code) {\
     fprintf(stderr, BRIGHT_CYAN("%s:%d %s() >>> " #code "\n"), __FILE__, __LINE__, __func__);\
@@ -16,10 +22,10 @@
 
 int main() {
     begin {
-        STACK_ERRNO stk_errno = STACK_ERRNO::SUCSSESS;
+        STACK_ERRNO stk_errno = STACK_ERRNO::SUCCESS;
         my_stack_t *stk1 = StackCtor(4, &stk_errno);
         fprintf(stderr, "errno is %d", stk_errno);
-        if (stk_errno != STACK_ERRNO::SUCSSESS) break; // Не удалось создать стек -> прекращаем дальнейшее исполнение
+        if (stk_errno != STACK_ERRNO::SUCCESS) break; // Не удалось создать стек -> прекращаем дальнейшее исполнение
 
         DO(stk_errno = StackPush(stk1, 10));
         DO(stk_errno = StackPush(stk1, 20));
@@ -37,7 +43,7 @@ int main() {
         DO(stk_errno = StackPush(stk1, 50));
         do {
             DO(stk_errno = StackPush(stk1, INT_MAX));
-            if (stk_errno == SUCSSESS)
+            if (stk_errno == SUCCESS)
                 break;
             else
                 DO(StackRealloc(stk1, 15));
@@ -47,7 +53,7 @@ int main() {
         DO(StackRealloc(stk1, 10));
 
         for(;;){
-            if ((stk_errno = StackPop(stk1, &value)) == STACK_ERRNO::SUCSSESS) {
+            if ((stk_errno = StackPop(stk1, &value)) == STACK_ERRNO::SUCCESS) {
                 StackDump(stk1, stk_errno, "for (;;) StackPop(...);");
             } else
                 break;

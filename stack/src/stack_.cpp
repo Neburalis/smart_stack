@@ -6,31 +6,30 @@
 #error
 #endif
 #include <limits.h>
-#include "stack.h"
+#include "policy.h"
+#include "stack_.h"
 #include "io_utils.h"
 
 #define begin do
 #define end while(0)
 
 // int typedef stack_element_t;
-// TODO - условная компиляция раздельное включение защит
-// TODO калькулятор
-// TODO возвращать индекс в массиве (хэндлеры)
-struct my_stack {
-    T1(int              canary1;)
 
-    size_t              size;
-    size_t              capacity;
-    stack_element_t *   data;
-
-    T3(size_t           hash;)
-    T3(size_t           data_hash;)
-
-    T1(int              canary2;)
-};
+// struct my_stack {
+//     T1(int              canary1;)
+//
+//     size_t              size;
+//     size_t              capacity;
+//     stack_element_t *   data;
+//
+//     T3(size_t           hash;)
+//     T3(size_t           data_hash;)
+//
+//     T1(int              canary2;)
+// };
 
 // enum {
-//     SUCSSESS                        = 0,
+//     SUCCESS                        = 0,
 //     NULL_PTR_PASSED                 = 1,
 //     CANNOT_ALLOCATE_MEMORY          = 2,
 //     STACK_EMPTY                     = 3,
@@ -55,9 +54,9 @@ T1(
 
 #define StackValidate(stack_var_name)                                           \
     {                                                                           \
-        STACK_ERRNO stk_errno = StackValidator(stack_var_name);                 \
-        if (stk_errno != STACK_ERRNO::SUCSSESS) {                               \
-            StackDump(stack_var_name, stk_errno, "stk_errno is not sucssess");  \
+        STACK_ERRNO stk_errno = StackValidatorI(stack_var_name);                 \
+        if (stk_errno != STACK_ERRNO::SUCCESS) {                               \
+            StackDumpI(stack_var_name, stk_errno, "stk_errno is not sucssess");  \
             return stk_errno;                                                   \
         }                                                                       \
     };
@@ -98,7 +97,7 @@ size_t cpl2(size_t x) {
     return x+1;
 }
 
-my_stack_t * StackCtor(size_t capacity, STACK_ERRNO * stk_errno) {
+my_stack_t * StackCtorI(size_t capacity, STACK_ERRNO * stk_errno) {
     if (stk_errno == NULL)
         return NULL;
 
@@ -139,25 +138,25 @@ my_stack_t * StackCtor(size_t capacity, STACK_ERRNO * stk_errno) {
         stk->hash = sdbm(stk, sizeof(my_stack_t));
     )
 
-    *stk_errno = StackValidator(stk);
-    if (*stk_errno != STACK_ERRNO::SUCSSESS) {
+    *stk_errno = StackValidatorI(stk);
+    if (*stk_errno != STACK_ERRNO::SUCCESS) {
         free(stk);
         return NULL;
     }
-    StackDump(stk, SUCSSESS, "validator check");
+    StackDumpI(stk, SUCCESS, "validator check");
 
     return stk;
 }
 
-STACK_ERRNO StackPush(my_stack_t * const stk, stack_element_t value) {
+STACK_ERRNO StackPushI(my_stack_t * const stk, stack_element_t value) {
     StackValidate(stk);
 
     if (value == POISON) {
-        StackDump(stk, STACK_ERRNO::POISON_COLLISION, StackError(STACK_ERRNO::POISON_COLLISION));
+        StackDumpI(stk, STACK_ERRNO::POISON_COLLISION, StackErrorI(STACK_ERRNO::POISON_COLLISION));
         return STACK_ERRNO::POISON_COLLISION;
     }
     if (stk->size + 1 > stk->capacity) {
-        StackDump(stk, STACK_ERRNO::STACK_OVERFLOW, StackError(STACK_ERRNO::STACK_OVERFLOW));
+        StackDumpI(stk, STACK_ERRNO::STACK_OVERFLOW, StackErrorI(STACK_ERRNO::STACK_OVERFLOW));
         return STACK_OVERFLOW;
     }
     stk->data[stk->size++ T1(+1)] = value;
@@ -170,10 +169,10 @@ STACK_ERRNO StackPush(my_stack_t * const stk, stack_element_t value) {
     )
 
     StackValidate(stk);
-    return STACK_ERRNO::SUCSSESS;
+    return STACK_ERRNO::SUCCESS;
 }
 
-STACK_ERRNO StackPop(my_stack_t * const stk, stack_element_t * value) {
+STACK_ERRNO StackPopI(my_stack_t * const stk, stack_element_t * value) {
     StackValidate(stk);
     if (value == NULL)
         return STACK_ERRNO::NULL_PTR_PASSED;
@@ -192,10 +191,10 @@ STACK_ERRNO StackPop(my_stack_t * const stk, stack_element_t * value) {
     )
 
     StackValidate(stk);
-    return STACK_ERRNO::SUCSSESS;
+    return STACK_ERRNO::SUCCESS;
 }
 
-STACK_ERRNO StackRealloc(my_stack_t * const stk, size_t new_size) {
+STACK_ERRNO StackReallocI(my_stack_t * const stk, size_t new_size) {
     StackValidate(stk);
 
     if (new_size < stk->size T1(+ 1)) {
@@ -206,7 +205,7 @@ STACK_ERRNO StackRealloc(my_stack_t * const stk, size_t new_size) {
 
     if (new_size == stk->capacity T1(+ 2)) { // Не изменяем стек
         StackValidate(stk);
-        return STACK_ERRNO::SUCSSESS;
+        return STACK_ERRNO::SUCCESS;
 
     } else if (new_size < stk->capacity) { // Сжимаем стек
         stack_element_t * new_data = (stack_element_t *) realloc(stk->data, new_size * sizeof(stack_element_t));
@@ -240,10 +239,10 @@ STACK_ERRNO StackRealloc(my_stack_t * const stk, size_t new_size) {
     )
 
     StackValidate(stk);
-    return STACK_ERRNO::SUCSSESS;
+    return STACK_ERRNO::SUCCESS;
 }
 
-STACK_ERRNO StackDtor(my_stack_t * stk) {
+STACK_ERRNO StackDtorI(my_stack_t * stk) {
     StackValidate(stk);
     // TODO: засрать стек
     free(stk->data);
@@ -252,30 +251,10 @@ STACK_ERRNO StackDtor(my_stack_t * stk) {
     free(stk);
     stk = NULL;
 
-    return STACK_ERRNO::SUCSSESS;
+    return STACK_ERRNO::SUCCESS;
 }
 
-const char * StackError(STACK_ERRNO stk_errno) {
-    switch (stk_errno) {
-        case STACK_ERRNO::SUCSSESS:                         return "No problems with stack";
-        case STACK_ERRNO::NULL_PTR_PASSED:                  return "Stack pointer is NULL";
-        case STACK_ERRNO::CANNOT_ALLOCATE_MEMORY:           return "Failed to allocate memory for stack data";
-        case STACK_ERRNO::STACK_EMPTY:                      return "Attempt to pop from empty stack";
-        case STACK_ERRNO::STACK_DATA_IS_NULL_PTR:           return "Stack data pointer is NULL";
-        case STACK_ERRNO::SIZE_BIGGER_THAN_CAPACITY:        return "Stack size exceeds capacity (corruption?)";
-        case STACK_ERRNO::STACK_OVERFLOW:                   return "Trying to push into filled stack";
-        case STACK_ERRNO::DATABUF_SIZE_NOT_MATCH_CAPACITY:  return "Size of databuf malloc section dont't match capacity of stack";
-        case STACK_ERRNO::CORRUPT_POISON:                   return "Not Poison in empty part => stack is damaged";
-        case STACK_ERRNO::POISON_COLLISION:                 return "Trying to insert poison. Use another value";
-        case STACK_ERRNO::WRONG_REALLOC_SIZE:               return "Size to realloc must be bigger then size of stack";
-        T1(case STACK_ERRNO::CORRUPT_CANARY:                return "Canary is spoiled => stack is damaged";)
-        T3(case STACK_ERRNO::CORRUPT_HASH:                  return "Hash is spoiled => stack is damaged";)
-        case STACK_ERRNO::CANNOT_REALLOCATE_MEMORY:         return "Realloc returned NULL PTR, this error is not fatal, stack data was not deleted or freed";
-        default:                                            return "Unknown stack error";
-    }
-}
-
-STACK_ERRNO StackValidator(my_stack_t * const stk) {
+STACK_ERRNO StackValidatorI(my_stack_t * const stk) {
     if (stk == NULL) // Стек - nullptr
         return STACK_ERRNO::NULL_PTR_PASSED;
     T1(
@@ -296,7 +275,7 @@ STACK_ERRNO StackValidator(my_stack_t * const stk) {
     T1(
         if (stk->data[0] != CANARY3 || stk->data[stk->capacity + 1] != CANARY4) {
             printf(BRIGHT_RED("MEOW\n"));
-            StackDump(stk, CORRUPT_CANARY, "CORRUPT_CANARY in validator");
+            StackDumpI(stk, CORRUPT_CANARY, "CORRUPT_CANARY in validator");
             // Одна из канареек в массиве была испорчена
             return STACK_ERRNO::CORRUPT_CANARY;
         }
@@ -321,10 +300,30 @@ STACK_ERRNO StackValidator(my_stack_t * const stk) {
         }
         stk->hash = old_hash;
     )
-    return STACK_ERRNO::SUCSSESS;
+    return STACK_ERRNO::SUCCESS;
 }
 
-void StackDump_impl(my_stack_t * const stk, STACK_ERRNO stk_errno, const char * const reason,
+const char * StackErrorI(STACK_ERRNO stk_errno) {
+    switch (stk_errno) {
+        case STACK_ERRNO::SUCCESS:                          return "No problems with stack";
+        case STACK_ERRNO::NULL_PTR_PASSED:                  return "Stack pointer is NULL";
+        case STACK_ERRNO::CANNOT_ALLOCATE_MEMORY:           return "Failed to allocate memory for stack data";
+        case STACK_ERRNO::STACK_EMPTY:                      return "Attempt to pop from empty stack";
+        case STACK_ERRNO::STACK_DATA_IS_NULL_PTR:           return "Stack data pointer is NULL";
+        case STACK_ERRNO::SIZE_BIGGER_THAN_CAPACITY:        return "Stack size exceeds capacity (corruption?)";
+        case STACK_ERRNO::STACK_OVERFLOW:                   return "Trying to push into filled stack";
+        case STACK_ERRNO::DATABUF_SIZE_NOT_MATCH_CAPACITY:  return "Size of databuf malloc section dont't match capacity of stack";
+        case STACK_ERRNO::CORRUPT_POISON:                   return "Not Poison in empty part => stack is damaged";
+        case STACK_ERRNO::POISON_COLLISION:                 return "Trying to insert poison. Use another value";
+        case STACK_ERRNO::WRONG_REALLOC_SIZE:               return "Size to realloc must be bigger then size of stack";
+        T1(case STACK_ERRNO::CORRUPT_CANARY:                return "Canary is spoiled => stack is damaged";)
+        T3(case STACK_ERRNO::CORRUPT_HASH:                  return "Hash is spoiled => stack is damaged";)
+        case STACK_ERRNO::CANNOT_REALLOCATE_MEMORY:         return "Realloc returned NULL PTR, this error is not fatal, stack data was not deleted or freed";
+        default:                                            return "Unknown stack error";
+    }
+}
+
+void StackDumpI_impl(my_stack_t * const stk, STACK_ERRNO stk_errno, const char * const reason,
         const char * file, int line, const char * func) {
     assert(reason   != NULL);
     assert(file     != NULL);
@@ -341,9 +340,9 @@ void StackDump_impl(my_stack_t * const stk, STACK_ERRNO stk_errno, const char * 
     }
 
     // Состояние стека
-    if (stk_errno != STACK_ERRNO::SUCSSESS) {
+    if (stk_errno != STACK_ERRNO::SUCCESS) {
         printf(BOLD(BRIGHT_RED("STACK IS IN INVALID STATE\n")));
-        printf("errno is " RED("%d") " → " BRIGHT_RED("%s") "\n", stk_errno, StackError(stk_errno));
+        printf("errno is " RED("%d") " → " BRIGHT_RED("%s") "\n", stk_errno, StackErrorI(stk_errno));
     } else {
             printf(BRIGHT_GREEN("STACK IS VALID\n"));
     }
