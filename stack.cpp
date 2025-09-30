@@ -13,15 +13,19 @@
 #define end while(0)
 
 // int typedef stack_element_t;
-// TODO - условная компиляция
-// TODO хэш массива
+// TODO - условная компиляция раздельное включение защит
+// TODO калькулятор
+// TODO возвращать индекс в массиве (хэндлеры)
 struct my_stack {
     T1(int              canary1;)
+
     size_t              size;
     size_t              capacity;
+    stack_element_t *   data;
+
     T3(size_t           hash;)
     T3(size_t           data_hash;)
-    stack_element_t *   data;
+
     T1(int              canary2;)
 };
 
@@ -69,8 +73,8 @@ the magic prime constant 65599 (2^6 + 2^16 - 1) was picked out of thin air
 while experimenting with many different constants. this is one of the algorithms
 used in berkeley db (see sleepycat) and elsewhere.
 */
-unsigned long long sdbm(void * void_data, size_t max_len) {
-    char * data = (char *) void_data;
+unsigned long long sdbm(const void * const void_data, size_t max_len) {
+    const char * data = (const char *) void_data;
     unsigned long long hash = 0;
     // printf("%s\n", data);
     while (max_len-- > 0) {
@@ -211,7 +215,7 @@ STACK_ERRNO StackRealloc(my_stack_t * const stk, size_t new_size) {
         stk->data = new_data;
         stk->capacity = new_size T1(- 2); // В структуре хранится размер без учета канареек
         T1(new_data[new_size - 1] = CANARY4);
-        
+
     } else if ((new_size > stk->capacity)) { // расширяем стек
         stack_element_t * new_data = (stack_element_t *) realloc(stk->data, new_size * sizeof(stack_element_t));
         if (new_data == NULL)
@@ -376,7 +380,7 @@ void StackDump_impl(my_stack_t * const stk, STACK_ERRNO stk_errno, const char * 
     )
 
     // Вывод data
-    if (stk->data == NULL) {
+    if (stk->data == NULL) { // TODO проверить канарейки
         printf("\tdata[" RED("NULL") "] at " CYAN("%p") "\n", stk->data);
     } else {
         printf("\tdata[" CYAN("%zu actual bytes") "] at " CYAN("%p") "\n", actual_bytes, stk->data);
