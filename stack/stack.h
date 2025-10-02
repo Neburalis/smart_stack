@@ -4,7 +4,7 @@
 #include "policy.h"
 #include "stack_errno.h"
 
-#if tolerance_lvl >= 1
+#ifdef enable_handlers_protection
     // Работа с хендлерами, пользователь не имеет указателя на структуру
     #include "handlers/handlers.h"
 

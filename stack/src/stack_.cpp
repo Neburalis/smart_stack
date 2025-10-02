@@ -18,35 +18,36 @@
 // int typedef stack_element_t;
 
 // struct my_stack {
-//     T1(int              canary1;)
+//     canary_protection(int              canary1;)
 //
 //     size_t              size;
 //     size_t              capacity;
 //     stack_element_t *   data;
 //
-//     T3(size_t           hash;)
-//     T3(size_t           data_hash;)
+//     hash_protection(size_t           hash;)
+//     hash_protection(size_t           data_hash;)
 //
-//     T1(int              canary2;)
+//     canary_protection(int              canary2;)
 // };
 
 // enum {
-//     SUCCESS                        = 0,
-//     NULL_PTR_PASSED                 = 1,
-//     CANNOT_ALLOCATE_MEMORY          = 2,
-//     STACK_EMPTY                     = 3,
-//     STACK_DATA_IS_NULL_PTR          = 4,
-//     SIZE_BIGGER_THAN_CAPACITY       = 5,
-//     STACK_OVERFLOW                  = 6,
-//     DATABUF_SIZE_NOT_MATCH_CAPACITY = 7,
-//     CORRUPT_POISON                  = 8,
-//     POISON_COLLISION                = 9,
-//     WRONG_REALLOC_SIZE              = 10,
-//     T1(CORRUPT_CANARY               = 11,)
-//     T3(CORRUPT_HASH                 = 12,)
+//     SUCCESS                          = 0,
+//     NULL_PTR_PASSED                  = 1,
+//     CANNOT_ALLOCATE_MEMORY           = 2,
+//     STACK_EMPTY                      = 3,
+//     STACK_DATA_IS_NULL_PTR           = 4,
+//     SIZE_BIGGER_THAN_CAPACITY        = 5,
+//     STACK_OVERFLOW                   = 6,
+//     DATABUF_SIZE_NOT_MATCH_CAPACITY  = 7,
+//     CORRUPT_POISON                   = 8,
+//     POISON_COLLISION                 = 9,
+//     WRONG_REALLOC_SIZE               = 10,
+//     canary_protection(CORRUPT_CANARY = 11,)
+//     hash_protection(CORRUPT_HASH     = 12,)
+//     CANNOT_REALLOCATE_MEMORY         = 13,
 // } typedef STACK_ERRNO;
 
-T1(
+canary_protection(
 #define POISON  (stack_element_t) 0x96716f66
 #define CANARY1 (stack_element_t) 0xDED0AFFF
 #define CANARY2 (stack_element_t) 0xEDA0FAAA
@@ -102,7 +103,7 @@ static size_t cpl2(size_t x) {
 static STACK_ERRNO StackValidatorI(my_stack * const stk) {
     if (stk == NULL) // Стек - nullptr
         return STACK_ERRNO::NULL_PTR_PASSED;
-    T1(
+    canary_protection(
         if (stk->canary1 != CANARY1 || stk->canary2 != CANARY2){ // Одна из канареек в структуре была испорчена
             return STACK_ERRNO::CORRUPT_CANARY;
         }
@@ -117,7 +118,7 @@ static STACK_ERRNO StackValidatorI(my_stack * const stk) {
     if (total_slots < stk->capacity) // Размер динамической памяти меньше вместимости
     return STACK_ERRNO::DATABUF_SIZE_NOT_MATCH_CAPACITY;
 
-    T1(
+    canary_protection(
         if (stk->data[0] != CANARY3 || stk->data[stk->capacity + 1] != CANARY4) {
             printf(BRIGHT_RED("MEOW\n"));
             StackDumpI(stk, CORRUPT_CANARY, "CORRUPT_CANARY in validator");
@@ -125,11 +126,11 @@ static STACK_ERRNO StackValidatorI(my_stack * const stk) {
             return STACK_ERRNO::CORRUPT_CANARY;
         }
     )
-    for (size_t i = stk->size T1(+1); i < stk->capacity - 1 T1(+1); ++i) {
+    for (size_t i = stk->size canary_protection(+1); i < stk->capacity - 1 canary_protection(+1); ++i) {
         if (stk->data[i] != POISON)
             return STACK_ERRNO::CORRUPT_POISON;
     }
-    T3(
+    hash_protection(
         if (stk->data_hash != sdbm(stk->data, stk->capacity)) {
             // Хеш массива не совпадает с сохраненным хешем массива
             return STACK_ERRNO::CORRUPT_HASH;
@@ -158,14 +159,14 @@ my_stack * StackCtorI(size_t capacity, STACK_ERRNO * stk_errno) {
         return NULL;
     }
 
-    T1(
+    canary_protection(
         stk->canary1 = CANARY1;
         stk->canary2 = CANARY2;
     )
 
     capacity = cpl2(capacity);
     stk->capacity = capacity;
-    T1(capacity += 2;) // Добавляем место для canary
+    canary_protection(capacity += 2;) // Добавляем место для canary
 
     stk->data = (stack_element_t *) calloc(capacity, sizeof(stack_element_t));
     if (stk->data == NULL) {
@@ -177,12 +178,12 @@ my_stack * StackCtorI(size_t capacity, STACK_ERRNO * stk_errno) {
         stk->data[i] = POISON;
     }
 
-    T1(
+    canary_protection(
         stk->data[0] = CANARY3;
         stk->data[capacity - 1] = CANARY4;
     )
 
-    T3(
+    hash_protection(
         stk->data_hash = sdbm(stk->data, stk->capacity);
 
         stk->hash = 0;
@@ -212,9 +213,9 @@ STACK_ERRNO StackPushI(my_stack * const stk, stack_element_t value) {
         StackDumpI(stk, STACK_ERRNO::STACK_OVERFLOW, StackErrorI(STACK_ERRNO::STACK_OVERFLOW));
         return STACK_OVERFLOW;
     }
-    stk->data[stk->size++ T1(+1)] = value;
+    stk->data[stk->size++ canary_protection(+1)] = value;
 
-    T3(
+    hash_protection(
         stk->data_hash = sdbm(stk->data, stk->capacity);
 
         stk->hash = 0;
@@ -230,13 +231,13 @@ STACK_ERRNO StackPopI(my_stack * const stk, stack_element_t * value) {
     if (value == NULL)
         return STACK_ERRNO::NULL_PTR_PASSED;
 
-    if (stk->size == 0 T1(+ 1))
+    if (stk->size == 0 canary_protection(+ 1))
         return STACK_ERRNO::STACK_EMPTY;
-    *value = stk->data[--stk->size T1(+ 1)];
+    *value = stk->data[--stk->size canary_protection(+ 1)];
 
-    stk->data[stk->size T1(+ 1)] = POISON;
+    stk->data[stk->size canary_protection(+ 1)] = POISON;
 
-    T3(
+    hash_protection(
         stk->data_hash = sdbm(stk->data, stk->capacity);
 
         stk->hash = 0;
@@ -250,13 +251,13 @@ STACK_ERRNO StackPopI(my_stack * const stk, stack_element_t * value) {
 STACK_ERRNO StackReallocI(my_stack * const stk, size_t new_size) {
     StackValidateReturnIfErr(stk);
 
-    if (new_size < stk->size T1(+ 1)) {
+    if (new_size < stk->size canary_protection(+ 1)) {
         return STACK_ERRNO::WRONG_REALLOC_SIZE;
     }
 
-    new_size = new_size T1(+ 2); // Если включены канарейки то размер на 2 больше
+    new_size = new_size canary_protection(+ 2); // Если включены канарейки то размер на 2 больше
 
-    if (new_size == stk->capacity T1(+ 2)) { // Не изменяем стек
+    if (new_size == stk->capacity canary_protection(+ 2)) { // Не изменяем стек
         StackValidateReturnIfErr(stk);
         return STACK_ERRNO::SUCCESS;
 
@@ -265,8 +266,8 @@ STACK_ERRNO StackReallocI(my_stack * const stk, size_t new_size) {
         if (new_data == NULL)
             return STACK_ERRNO::CANNOT_REALLOCATE_MEMORY; // Если реаллок не выполнился, он не изменяет старый указатель
         stk->data = new_data;
-        stk->capacity = new_size T1(- 2); // В структуре хранится размер без учета канареек
-        T1(new_data[new_size - 1] = CANARY4);
+        stk->capacity = new_size canary_protection(- 2); // В структуре хранится размер без учета канареек
+        canary_protection(new_data[new_size - 1] = CANARY4);
 
     } else if ((new_size > stk->capacity)) { // расширяем стек
         stack_element_t * new_data = (stack_element_t *) realloc(stk->data, new_size * sizeof(stack_element_t));
@@ -276,15 +277,15 @@ STACK_ERRNO StackReallocI(my_stack * const stk, size_t new_size) {
         stk->data = new_data;
 
         // Инициализируем новую память ядом, переносим канарейку (если есть) в конец
-        for (size_t i = stk->capacity T1(+ 1); i < new_size T1(- 1); ++i) {
+        for (size_t i = stk->capacity canary_protection(+ 1); i < new_size canary_protection(- 1); ++i) {
             new_data[i] = POISON; // Указатель на тот же массив, но каждый раз не получаем его из структуры
         }
-        T1(new_data[new_size - 1] = CANARY4);
+        canary_protection(new_data[new_size - 1] = CANARY4);
 
-        stk->capacity = new_size T1(- 2); // В структуре хранится размер без учета канареек
+        stk->capacity = new_size canary_protection(- 2); // В структуре хранится размер без учета канареек
     }
 
-    T3( // Пересчитываем хэш после реаллокации
+    hash_protection( // Пересчитываем хэш после реаллокации
         stk->data_hash = sdbm(stk->data, stk->capacity);
 
         stk->hash = 0;
@@ -320,8 +321,8 @@ const char * StackErrorI(STACK_ERRNO stk_errno) {
         case STACK_ERRNO::CORRUPT_POISON:                   return "Not Poison in empty part => stack is damaged";
         case STACK_ERRNO::POISON_COLLISION:                 return "Trying to insert poison. Use another value";
         case STACK_ERRNO::WRONG_REALLOC_SIZE:               return "Size to realloc must be bigger then size of stack";
-        T1(case STACK_ERRNO::CORRUPT_CANARY:                return "Canary is spoiled => stack is damaged";)
-        T3(case STACK_ERRNO::CORRUPT_HASH:                  return "Hash is spoiled => stack is damaged";)
+        canary_protection(case STACK_ERRNO::CORRUPT_CANARY:                return "Canary is spoiled => stack is damaged";)
+        hash_protection(case STACK_ERRNO::CORRUPT_HASH:                  return "Hash is spoiled => stack is damaged";)
         case STACK_ERRNO::CANNOT_REALLOCATE_MEMORY:         return "Realloc returned NULL PTR, this error is not fatal, stack data was not deleted or freed";
         default:                                            return "Unknown stack error";
     }
@@ -355,12 +356,12 @@ void StackDumpI_impl(my_stack * const stk, STACK_ERRNO stk_errno, const char * c
     printf("stack at " CYAN("%p\n"), stk);
 
     size_t actual_bytes = 0;
-    size_t expected_bytes = (stk->capacity T1(+ 2)) * sizeof(stack_element_t);
+    size_t expected_bytes = (stk->capacity canary_protection(+ 2)) * sizeof(stack_element_t);
 
     if (stk->data != NULL) {
         actual_bytes = malloc_size(stk->data);
     }
-    T1(
+    canary_protection(
         printf("\tleft_canary = " BRIGHT_GREEN("%d") " [%#x] " BRIGHT_GREEN("(CANARY)\n"), stk->canary1, (unsigned) stk->canary1);
     )
     // Вывод capacity
@@ -374,10 +375,10 @@ void StackDumpI_impl(my_stack * const stk, STACK_ERRNO stk_errno, const char * c
     if (stk->size == 0) {
         printf(BRIGHT_RED("NONE"));
     } else {
-        printf(BRIGHT_YELLOW("%zu"), stk->size - 1 T1(+ 1));
+        printf(BRIGHT_YELLOW("%zu"), stk->size - 1 canary_protection(+ 1));
     }
     printf(")\n");
-    T3(
+    hash_protection(
         printf("\thash        = " BRIGHT_WHITE("%zu") " [%#zx]\n", stk->hash, stk->hash);
         printf("\tdata_hash   = " BRIGHT_WHITE("%zu") " [%#zx]\n", stk->data_hash, stk->data_hash);
     )
@@ -399,14 +400,14 @@ void StackDumpI_impl(my_stack * const stk, STACK_ERRNO stk_errno, const char * c
         printf("\t\t" BRIGHT_RED("DATA IS NULL POINTER!\n"));
     } else {
         size_t total_slots = actual_bytes / sizeof(stack_element_t);
-        T1(printf("\t\t" YELLOW(" ") BRIGHT_GREEN("[0]") " = " BRIGHT_GREEN("%d") " [%#x] " BRIGHT_GREEN("(CANARY)\n"), stk->data[0], (unsigned) stk->data[0]);)
-        for(size_t i = 0 T1(+ 1); i < total_slots; ++i){
-            if (i < stk->size T1(+ 1)) {
+        canary_protection(printf("\t\t" YELLOW(" ") BRIGHT_GREEN("[0]") " = " BRIGHT_GREEN("%d") " [%#x] " BRIGHT_GREEN("(CANARY)\n"), stk->data[0], (unsigned) stk->data[0]);)
+        for(size_t i = 0 canary_protection(+ 1); i < total_slots; ++i){
+            if (i < stk->size canary_protection(+ 1)) {
                 printf("\t\t" BRIGHT_MAGENTA("*") BRIGHT_YELLOW("[%zu]") " = " BRIGHT_WHITE("%d") " [%#x]\n", i, stk->data[i], (unsigned) stk->data[i]);
-            } else if (i < stk->capacity T1(+ 1)) {
+            } else if (i < stk->capacity canary_protection(+ 1)) {
                 printf("\t\t" YELLOW(" ") YELLOW("[%zu]") " = " YELLOW("%d") " [%#x] " BRIGHT_BLACK("(POISON)\n"), i, stk->data[i], (unsigned) stk->data[i]);
-            } else if (i == stk->capacity T1(+ 1)) {
-                T1(printf("\t\t" YELLOW(" ") BRIGHT_GREEN("[%zu]") " = " BRIGHT_GREEN("%d") " [%#x] " BRIGHT_GREEN("(CANARY)\n"), i, stk->data[i], (unsigned) stk->data[i]);)
+            } else if (i == stk->capacity canary_protection(+ 1)) {
+                canary_protection(printf("\t\t" YELLOW(" ") BRIGHT_GREEN("[%zu]") " = " BRIGHT_GREEN("%d") " [%#x] " BRIGHT_GREEN("(CANARY)\n"), i, stk->data[i], (unsigned) stk->data[i]);)
             } else {
                 printf("\t\t" BRIGHT_BLACK(" ") BRIGHT_BLACK("[%zu]") " = " BRIGHT_BLACK("%d") " [%#x] " BRIGHT_BLACK("(padding)\n"), i, stk->data[i], (unsigned) stk->data[i]);
             }
@@ -414,7 +415,7 @@ void StackDumpI_impl(my_stack * const stk, STACK_ERRNO stk_errno, const char * c
     }
 
     printf("\t}\n");
-    T1(printf("\tright_canary = " BRIGHT_GREEN("%d")" [%#x] " BRIGHT_GREEN("(CANARY)\n"), stk->canary2, (unsigned) stk->canary2);)
+    canary_protection(printf("\tright_canary = " BRIGHT_GREEN("%d")" [%#x] " BRIGHT_GREEN("(CANARY)\n"), stk->canary2, (unsigned) stk->canary2);)
     printf("}\n");
     printf("================================================\n\n");
 }

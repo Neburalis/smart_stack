@@ -7,16 +7,16 @@
 int typedef stack_element_t;
 
 struct my_stack {
-    T1(int              canary1;)
+    canary_protection(int   canary1;)
 
-    size_t              size;
-    size_t              capacity;
-    stack_element_t *   data;
+    size_t                  size;
+    size_t                  capacity;
+    stack_element_t *       data;
 
-    T3(size_t           hash;)
-    T3(size_t           data_hash;)
+    hash_protection(size_t  hash;)
+    hash_protection(size_t  data_hash;)
 
-    T1(int              canary2;)
+    canary_protection(int   canary2;)
 };
 
 #define StackDumpI(stk, stk_errno, reason) \
