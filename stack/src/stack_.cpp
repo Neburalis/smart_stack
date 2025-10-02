@@ -1,10 +1,12 @@
 #include <assert.h>
 #include <stdio.h>
+
 #ifdef __APPLE__
-#include <malloc/malloc.h>
+#include <malloc/malloc.h> // Системно зависимая библиотека, только для macos
 #else
 #error
 #endif
+
 #include <limits.h>
 #include "policy.h"
 #include "stack_.h"
@@ -52,7 +54,7 @@ T1(
 #define CANARY4 (stack_element_t) 0xABCD1234
 )
 
-#define StackValidate(stack_var_name)                                           \
+#define StackValidateReturnIfErr(stack_var_name)                                           \
     {                                                                           \
         STACK_ERRNO stk_errno = StackValidatorI(stack_var_name);                 \
         if (stk_errno != STACK_ERRNO::SUCCESS) {                               \
@@ -72,7 +74,7 @@ the magic prime constant 65599 (2^6 + 2^16 - 1) was picked out of thin air
 while experimenting with many different constants. this is one of the algorithms
 used in berkeley db (see sleepycat) and elsewhere.
 */
-unsigned long long sdbm(const void * const void_data, size_t max_len) {
+static unsigned long long sdbm(const void * const void_data, size_t max_len) {
     const char * data = (const char *) void_data;
     unsigned long long hash = 0;
     // printf("%s\n", data);
@@ -87,7 +89,7 @@ unsigned long long sdbm(const void * const void_data, size_t max_len) {
 }
 
 // Нахождение ближайшей степени 2 >= x
-size_t cpl2(size_t x) {
+static size_t cpl2(size_t x) {
     x = x - 1;
     x = x | (x >> 1);
     x = x | (x >> 2);
@@ -97,164 +99,7 @@ size_t cpl2(size_t x) {
     return x+1;
 }
 
-my_stack_t * StackCtorI(size_t capacity, STACK_ERRNO * stk_errno) {
-    if (stk_errno == NULL)
-        return NULL;
-
-    my_stack_t * stk = (my_stack_t *) calloc(1, sizeof(my_stack_t));
-    if (stk == NULL) {
-        *stk_errno = STACK_ERRNO::CANNOT_ALLOCATE_MEMORY;
-        return NULL;
-    }
-
-    T1(
-        stk->canary1 = CANARY1;
-        stk->canary2 = CANARY2;
-    )
-
-    capacity = cpl2(capacity);
-    stk->capacity = capacity;
-    T1(capacity += 2;) // Добавляем место для canary
-
-    stk->data = (stack_element_t *) calloc(capacity, sizeof(stack_element_t));
-    if (stk->data == NULL) {
-        *stk_errno = STACK_ERRNO::CANNOT_ALLOCATE_MEMORY;
-        return NULL;
-    }
-
-    for (size_t i = stk->size; i < capacity; ++i) {
-        stk->data[i] = POISON;
-    }
-
-    T1(
-        stk->data[0] = CANARY3;
-        stk->data[capacity - 1] = CANARY4;
-    )
-
-    T3(
-        stk->data_hash = sdbm(stk->data, stk->capacity);
-
-        stk->hash = 0;
-        stk->hash = sdbm(stk, sizeof(my_stack_t));
-    )
-
-    *stk_errno = StackValidatorI(stk);
-    if (*stk_errno != STACK_ERRNO::SUCCESS) {
-        free(stk);
-        return NULL;
-    }
-    StackDumpI(stk, SUCCESS, "validator check");
-
-    return stk;
-}
-
-STACK_ERRNO StackPushI(my_stack_t * const stk, stack_element_t value) {
-    StackValidate(stk);
-
-    if (value == POISON) {
-        StackDumpI(stk, STACK_ERRNO::POISON_COLLISION, StackErrorI(STACK_ERRNO::POISON_COLLISION));
-        return STACK_ERRNO::POISON_COLLISION;
-    }
-    if (stk->size + 1 > stk->capacity) {
-        StackDumpI(stk, STACK_ERRNO::STACK_OVERFLOW, StackErrorI(STACK_ERRNO::STACK_OVERFLOW));
-        return STACK_OVERFLOW;
-    }
-    stk->data[stk->size++ T1(+1)] = value;
-
-    T3(
-        stk->data_hash = sdbm(stk->data, stk->capacity);
-
-        stk->hash = 0;
-        stk->hash = sdbm(stk, sizeof(my_stack_t));
-    )
-
-    StackValidate(stk);
-    return STACK_ERRNO::SUCCESS;
-}
-
-STACK_ERRNO StackPopI(my_stack_t * const stk, stack_element_t * value) {
-    StackValidate(stk);
-    if (value == NULL)
-        return STACK_ERRNO::NULL_PTR_PASSED;
-
-    if (stk->size == 0 T1(+ 1))
-        return STACK_ERRNO::STACK_EMPTY;
-    *value = stk->data[--stk->size T1(+ 1)];
-
-    stk->data[stk->size T1(+ 1)] = POISON;
-
-    T3(
-        stk->data_hash = sdbm(stk->data, stk->capacity);
-
-        stk->hash = 0;
-        stk->hash = sdbm(stk, sizeof(my_stack_t));
-    )
-
-    StackValidate(stk);
-    return STACK_ERRNO::SUCCESS;
-}
-
-STACK_ERRNO StackReallocI(my_stack_t * const stk, size_t new_size) {
-    StackValidate(stk);
-
-    if (new_size < stk->size T1(+ 1)) {
-        return STACK_ERRNO::WRONG_REALLOC_SIZE;
-    }
-
-    new_size = new_size T1(+ 2); // Если включены канарейки то размер на 2 больше
-
-    if (new_size == stk->capacity T1(+ 2)) { // Не изменяем стек
-        StackValidate(stk);
-        return STACK_ERRNO::SUCCESS;
-
-    } else if (new_size < stk->capacity) { // Сжимаем стек
-        stack_element_t * new_data = (stack_element_t *) realloc(stk->data, new_size * sizeof(stack_element_t));
-        if (new_data == NULL)
-            return STACK_ERRNO::CANNOT_REALLOCATE_MEMORY; // Если реаллок не выполнился, он не изменяет старый указатель
-        stk->data = new_data;
-        stk->capacity = new_size T1(- 2); // В структуре хранится размер без учета канареек
-        T1(new_data[new_size - 1] = CANARY4);
-
-    } else if ((new_size > stk->capacity)) { // расширяем стек
-        stack_element_t * new_data = (stack_element_t *) realloc(stk->data, new_size * sizeof(stack_element_t));
-        if (new_data == NULL)
-            return STACK_ERRNO::CANNOT_REALLOCATE_MEMORY; // Если реаллок не выполнился, он не изменяет старый указатель
-
-        stk->data = new_data;
-
-        // Инициализируем новую память ядом, переносим канарейку (если есть) в конец
-        for (size_t i = stk->capacity T1(+ 1); i < new_size T1(- 1); ++i) {
-            new_data[i] = POISON; // Указатель на тот же массив, но каждый раз не получаем его из структуры
-        }
-        T1(new_data[new_size - 1] = CANARY4);
-
-        stk->capacity = new_size T1(- 2); // В структуре хранится размер без учета канареек
-    }
-
-    T3( // Пересчитываем хэш после реаллокации
-        stk->data_hash = sdbm(stk->data, stk->capacity);
-
-        stk->hash = 0;
-        stk->hash = sdbm(stk, sizeof(my_stack_t));
-    )
-
-    StackValidate(stk);
-    return STACK_ERRNO::SUCCESS;
-}
-
-STACK_ERRNO StackDtorI(my_stack_t * stk) {
-    StackValidate(stk);
-    // TODO: засрать стек
-    free(stk->data);
-    stk->data = NULL;
-
-    free(stk);
-    stk = NULL;
-
-    return STACK_ERRNO::SUCCESS;
-}
-
-STACK_ERRNO StackValidatorI(my_stack_t * const stk) {
+static STACK_ERRNO StackValidatorI(my_stack * const stk) {
     if (stk == NULL) // Стек - nullptr
         return STACK_ERRNO::NULL_PTR_PASSED;
     T1(
@@ -292,7 +137,7 @@ STACK_ERRNO StackValidatorI(my_stack_t * const stk) {
 
         uint64_t old_hash = stk->hash;
         stk->hash = 0;
-        uint64_t now_hash = sdbm(stk, sizeof(my_stack_t));
+        uint64_t now_hash = sdbm(stk, sizeof(my_stack));
         if (now_hash != old_hash) {
             // printf("now_hash is " BRIGHT_WHITE("%lld") " [%#x] old_hash is " BRIGHT_WHITE("%lld") " [%#x]\n", now_hash, now_hash, old_hash, old_hash);
             stk->hash = old_hash;
@@ -300,6 +145,165 @@ STACK_ERRNO StackValidatorI(my_stack_t * const stk) {
         }
         stk->hash = old_hash;
     )
+    return STACK_ERRNO::SUCCESS;
+}
+
+my_stack * StackCtorI(size_t capacity, STACK_ERRNO * stk_errno) {
+    if (stk_errno == NULL)
+        return NULL;
+
+    my_stack * stk = (my_stack *) calloc(1, sizeof(my_stack));
+    if (stk == NULL) {
+        *stk_errno = STACK_ERRNO::CANNOT_ALLOCATE_MEMORY;
+        return NULL;
+    }
+
+    T1(
+        stk->canary1 = CANARY1;
+        stk->canary2 = CANARY2;
+    )
+
+    capacity = cpl2(capacity);
+    stk->capacity = capacity;
+    T1(capacity += 2;) // Добавляем место для canary
+
+    stk->data = (stack_element_t *) calloc(capacity, sizeof(stack_element_t));
+    if (stk->data == NULL) {
+        *stk_errno = STACK_ERRNO::CANNOT_ALLOCATE_MEMORY;
+        return NULL;
+    }
+
+    for (size_t i = stk->size; i < capacity; ++i) {
+        stk->data[i] = POISON;
+    }
+
+    T1(
+        stk->data[0] = CANARY3;
+        stk->data[capacity - 1] = CANARY4;
+    )
+
+    T3(
+        stk->data_hash = sdbm(stk->data, stk->capacity);
+
+        stk->hash = 0;
+        stk->hash = sdbm(stk, sizeof(my_stack));
+    )
+
+    *stk_errno = StackValidatorI(stk);
+    StackDumpI(stk, SUCCESS, "validator check");
+    if (*stk_errno != STACK_ERRNO::SUCCESS) {
+        free(stk);
+        return NULL;
+    }
+
+    return stk;
+}
+
+STACK_ERRNO StackPushI(my_stack * const stk, stack_element_t value) {
+    StackValidateReturnIfErr(stk);
+
+    printf("stk ptr in %s is [%p]\n", __PRETTY_FUNCTION__, stk);
+
+    if (value == POISON) {
+        StackDumpI(stk, STACK_ERRNO::POISON_COLLISION, StackErrorI(STACK_ERRNO::POISON_COLLISION));
+        return STACK_ERRNO::POISON_COLLISION;
+    }
+    if (stk->size + 1 > stk->capacity) {
+        StackDumpI(stk, STACK_ERRNO::STACK_OVERFLOW, StackErrorI(STACK_ERRNO::STACK_OVERFLOW));
+        return STACK_OVERFLOW;
+    }
+    stk->data[stk->size++ T1(+1)] = value;
+
+    T3(
+        stk->data_hash = sdbm(stk->data, stk->capacity);
+
+        stk->hash = 0;
+        stk->hash = sdbm(stk, sizeof(my_stack));
+    )
+
+    StackValidateReturnIfErr(stk);
+    return STACK_ERRNO::SUCCESS;
+}
+
+STACK_ERRNO StackPopI(my_stack * const stk, stack_element_t * value) {
+    StackValidateReturnIfErr(stk);
+    if (value == NULL)
+        return STACK_ERRNO::NULL_PTR_PASSED;
+
+    if (stk->size == 0 T1(+ 1))
+        return STACK_ERRNO::STACK_EMPTY;
+    *value = stk->data[--stk->size T1(+ 1)];
+
+    stk->data[stk->size T1(+ 1)] = POISON;
+
+    T3(
+        stk->data_hash = sdbm(stk->data, stk->capacity);
+
+        stk->hash = 0;
+        stk->hash = sdbm(stk, sizeof(my_stack));
+    )
+
+    StackValidateReturnIfErr(stk);
+    return STACK_ERRNO::SUCCESS;
+}
+
+STACK_ERRNO StackReallocI(my_stack * const stk, size_t new_size) {
+    StackValidateReturnIfErr(stk);
+
+    if (new_size < stk->size T1(+ 1)) {
+        return STACK_ERRNO::WRONG_REALLOC_SIZE;
+    }
+
+    new_size = new_size T1(+ 2); // Если включены канарейки то размер на 2 больше
+
+    if (new_size == stk->capacity T1(+ 2)) { // Не изменяем стек
+        StackValidateReturnIfErr(stk);
+        return STACK_ERRNO::SUCCESS;
+
+    } else if (new_size < stk->capacity) { // Сжимаем стек
+        stack_element_t * new_data = (stack_element_t *) realloc(stk->data, new_size * sizeof(stack_element_t));
+        if (new_data == NULL)
+            return STACK_ERRNO::CANNOT_REALLOCATE_MEMORY; // Если реаллок не выполнился, он не изменяет старый указатель
+        stk->data = new_data;
+        stk->capacity = new_size T1(- 2); // В структуре хранится размер без учета канареек
+        T1(new_data[new_size - 1] = CANARY4);
+
+    } else if ((new_size > stk->capacity)) { // расширяем стек
+        stack_element_t * new_data = (stack_element_t *) realloc(stk->data, new_size * sizeof(stack_element_t));
+        if (new_data == NULL)
+            return STACK_ERRNO::CANNOT_REALLOCATE_MEMORY; // Если реаллок не выполнился, он не изменяет старый указатель
+
+        stk->data = new_data;
+
+        // Инициализируем новую память ядом, переносим канарейку (если есть) в конец
+        for (size_t i = stk->capacity T1(+ 1); i < new_size T1(- 1); ++i) {
+            new_data[i] = POISON; // Указатель на тот же массив, но каждый раз не получаем его из структуры
+        }
+        T1(new_data[new_size - 1] = CANARY4);
+
+        stk->capacity = new_size T1(- 2); // В структуре хранится размер без учета канареек
+    }
+
+    T3( // Пересчитываем хэш после реаллокации
+        stk->data_hash = sdbm(stk->data, stk->capacity);
+
+        stk->hash = 0;
+        stk->hash = sdbm(stk, sizeof(my_stack));
+    )
+
+    StackValidateReturnIfErr(stk);
+    return STACK_ERRNO::SUCCESS;
+}
+
+STACK_ERRNO StackDtorI(my_stack * stk) {
+    StackValidateReturnIfErr(stk);
+    // TODO: засрать стек
+    free(stk->data);
+    stk->data = NULL;
+
+    free(stk);
+    stk = NULL;
+
     return STACK_ERRNO::SUCCESS;
 }
 
@@ -323,7 +327,7 @@ const char * StackErrorI(STACK_ERRNO stk_errno) {
     }
 }
 
-void StackDumpI_impl(my_stack_t * const stk, STACK_ERRNO stk_errno, const char * const reason,
+void StackDumpI_impl(my_stack * const stk, STACK_ERRNO stk_errno, const char * const reason,
         const char * file, int line, const char * func) {
     assert(reason   != NULL);
     assert(file     != NULL);

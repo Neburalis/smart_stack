@@ -23,13 +23,24 @@
 int main() {
     begin {
         STACK_ERRNO stk_errno = STACK_ERRNO::SUCCESS;
-        my_stack_t *stk1 = StackCtor(4, &stk_errno);
-        fprintf(stderr, "errno is %d", stk_errno);
+        StackHandler stk1 = StackCtor(4, &stk_errno);
+        fprintf(stderr, "errno of stk1 is %d\n", stk_errno);
+        StackHandler stk2 = StackCtor(5, &stk_errno);
+        fprintf(stderr, "errno of stk2 is %d\n", stk_errno);
         if (stk_errno != STACK_ERRNO::SUCCESS) break; // Не удалось создать стек -> прекращаем дальнейшее исполнение
+
+        printf("stk1 is %zu (%p), stk2 is %zu (%p)\n", stk1, stk1, stk2, stk2);
 
         DO(stk_errno = StackPush(stk1, 10));
         DO(stk_errno = StackPush(stk1, 20));
         DO(stk_errno = StackPush(stk1, 30));
+
+        stk_errno = StackPush(stk2, 10);
+        StackDump(stk2, stk_errno, "main:39");
+        stk_errno = StackPush(stk2, 20);
+        StackDump(stk2, stk_errno, "main:41");
+        stk_errno = StackPush(stk2, 30);
+        StackDump(stk2, stk_errno, "main:43");
 
         stack_element_t value;
 
