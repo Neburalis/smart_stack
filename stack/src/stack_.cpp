@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
 
 #ifdef __APPLE__
 #include <malloc/malloc.h> // Системно зависимая библиотека, только для macos
@@ -299,9 +300,15 @@ STACK_ERRNO StackReallocI(my_stack * const stk, size_t new_size) {
 STACK_ERRNO StackDtorI(my_stack * stk) {
     StackValidateReturnIfErr(stk);
     // TODO: засрать стек
+
+    size_t data_bytes  = malloc_size(stk->data);
+    size_t stack_bytes = malloc_size(stk);
+
+    memset(stk->data, 0xDD, data_bytes);
     free(stk->data);
     stk->data = NULL;
 
+    memset(stk, 0xDD, stack_bytes);
     free(stk);
     stk = NULL;
 
@@ -384,9 +391,10 @@ void StackDumpI_impl(my_stack * const stk, STACK_ERRNO stk_errno, const char * c
     )
 
     // Вывод data
-    if (stk->data == NULL) { // TODO проверить канарейки
-        printf("\tdata[" RED("NULL") "] at " CYAN("%p") "\n", stk->data);
-    } else {
+    if (stk->data == NULL canary_protection(
+        && stk->data[0] == CANARY3 && stk->data[stk->capacity + 1] == CANARY4)) { // TODO проверить канарейки
+            printf("\tdata[" RED("NULL") "] at " CYAN("%p") "\n", stk->data);
+        } else {
         printf("\tdata[" CYAN("%zu actual bytes") "] at " CYAN("%p") "\n", actual_bytes, stk->data);
 
         if (actual_bytes > expected_bytes) {
