@@ -204,15 +204,16 @@ my_stack * StackCtorI(size_t capacity, STACK_ERRNO * stk_errno) {
 STACK_ERRNO StackPushI(my_stack * const stk, stack_element_t value) {
     StackValidateReturnIfErr(stk);
 
-    printf("stk ptr in %s is [%p]\n", __PRETTY_FUNCTION__, stk);
+    DEBUG_PRINT("stk ptr in %s is [%p]\n", __PRETTY_FUNCTION__, stk);
 
     if (value == POISON) {
         StackDumpI(stk, STACK_ERRNO::POISON_COLLISION, StackErrorI(STACK_ERRNO::POISON_COLLISION));
         return STACK_ERRNO::POISON_COLLISION;
     }
     if (stk->size + 1 > stk->capacity) {
-        StackDumpI(stk, STACK_ERRNO::STACK_OVERFLOW, StackErrorI(STACK_ERRNO::STACK_OVERFLOW));
-        return STACK_OVERFLOW;
+        // StackDumpI(stk, STACK_ERRNO::STACK_OVERFLOW, StackErrorI(STACK_ERRNO::STACK_OVERFLOW));
+        // return STACK_OVERFLOW;
+        StackReallocI(stk, stk->capacity*2);
     }
     stk->data[stk->size++ canary_protection(+1)] = value;
 
