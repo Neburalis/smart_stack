@@ -1,3 +1,7 @@
+#ifndef tolerance_lvl
+# define tolerance_lvl 0
+#endif
+
 #if tolerance_lvl >= 1
 #define enable_handlers_protection
 #define enable_canary_protection
