@@ -10,6 +10,7 @@
 
     #define StackDump(stk, stk_errno, reason)           StackDumpH(stk, stk_errno, reason)
     #define StackCtor(capacity, stk_errno)              StackCtorH(capacity, stk_errno)
+    #define StackValidator(stk)                         StackValidatorH(stk)
     #define StackPush(stk, value)                       StackPushH(stk, value)
     #define StackPop(stk, value)                        StackPopH(stk, value)
     #define StackRealloc(stk, new_size)                 StackReallocH(stk, new_size)
@@ -23,6 +24,7 @@
 
     #define StackDump(stk, stk_errno, reason)           StackDumpI(stk, stk_errno, reason)
     #define StackCtor(capacity, stk_errno)              StackCtorI(capacity, stk_errno)
+    #define StackValidator(stk)                         StackValidatorI(stk)
     #define StackPush(stk, value)                       StackPushI(stk, value)
     #define StackPop(stk, value)                        StackPopI(stk, value)
     #define StackRealloc(stk, new_size)                 StackReallocI(stk, new_size)

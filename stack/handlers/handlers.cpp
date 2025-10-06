@@ -18,7 +18,7 @@ static StackHandler addToHandlersArr(my_stack * ptr) {
 
     HandlersArr[handler] = ptr;
 
-    return handler;
+    return handler; // TODO return xor
 }
 
 static my_stack * popFromHandler(StackHandler handler) {
@@ -41,11 +41,19 @@ StackHandler StackCtorH(const size_t capacity, STACK_ERRNO * stk_errno) {
     return addToHandlersArr(ptr);
 }
 
+STACK_ERRNO StackValidatorH(StackHandler handler) {
+    assert(HandlersCount < STACK_HANDLERS_ARRAY_SIZE);
+    assert(HandlersArr[NextHandler] == NULL);
+
+    STACK_ERRNO stk_errno = StackValidatorI(HandlersArr[handler]);
+    return stk_errno;
+}
+
 STACK_ERRNO StackPushH(StackHandler handler, stack_element_t value) {
     assert(HandlersCount < STACK_HANDLERS_ARRAY_SIZE);
     assert(HandlersArr[NextHandler] == NULL);
 
-    printf("handler in %s is %zu (%p) [%p]\n", __PRETTY_FUNCTION__, handler, handler, HandlersArr[handler]);
+    // DEBUG_PRINT("handler in %s is %zu (%p) [%p]\n", __PRETTY_FUNCTION__, handler, handler, HandlersArr[handler]);
 
     STACK_ERRNO stk_errno = StackPushI(HandlersArr[handler], value);
     return stk_errno;

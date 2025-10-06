@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include "stack_errno.h"
 
-int typedef stack_element_t;
+double typedef stack_element_t;
 
 typedef size_t StackHandler;
 #define STACK_HANDLERS_ARRAY_SIZE 128
@@ -13,6 +13,8 @@ typedef size_t StackHandler;
     StackDumpH_impl(stk, stk_errno, reason, __FILE__, __LINE__, __PRETTY_FUNCTION__)
 
 StackHandler StackCtorH(const size_t capacity, STACK_ERRNO * stk_errno);
+
+STACK_ERRNO StackValidatorH(StackHandler handler);
 
 STACK_ERRNO StackPushH(StackHandler handler, stack_element_t value);
 

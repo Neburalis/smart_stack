@@ -4,7 +4,7 @@
 #include "policy.h"
 #include "stack_errno.h"
 
-int typedef stack_element_t;
+double typedef stack_element_t;
 
 struct my_stack {
     canary_protection(int   canary1;)
@@ -23,6 +23,8 @@ struct my_stack {
     StackDumpI_impl(stk, stk_errno, reason, __FILE__, __LINE__, __PRETTY_FUNCTION__)
 
 my_stack * StackCtorI(size_t capacity, STACK_ERRNO * stk_errno);
+
+STACK_ERRNO StackValidatorI(my_stack * const stk);
 
 STACK_ERRNO StackPushI(my_stack * stk, stack_element_t value);
 

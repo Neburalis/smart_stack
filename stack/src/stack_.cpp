@@ -101,7 +101,7 @@ static size_t cpl2(size_t x) {
     return x+1;
 }
 
-static STACK_ERRNO StackValidatorI(my_stack * const stk) {
+STACK_ERRNO StackValidatorI(my_stack * const stk) {
     if (stk == NULL) // Стек - nullptr
         return STACK_ERRNO::NULL_PTR_PASSED;
     canary_protection(
@@ -192,7 +192,7 @@ my_stack * StackCtorI(size_t capacity, STACK_ERRNO * stk_errno) {
     )
 
     *stk_errno = StackValidatorI(stk);
-    StackDumpI(stk, SUCCESS, "validator check");
+    T1(StackDumpI(stk, SUCCESS, "validator check"));
     if (*stk_errno != STACK_ERRNO::SUCCESS) {
         free(stk);
         return NULL;
@@ -204,7 +204,7 @@ my_stack * StackCtorI(size_t capacity, STACK_ERRNO * stk_errno) {
 STACK_ERRNO StackPushI(my_stack * const stk, stack_element_t value) {
     StackValidateReturnIfErr(stk);
 
-    DEBUG_PRINT("stk ptr in %s is [%p]\n", __PRETTY_FUNCTION__, stk);
+    // DEBUG_PRINT("stk ptr in %s is [%p]\n", __PRETTY_FUNCTION__, stk);
 
     if (value == POISON) {
         StackDumpI(stk, STACK_ERRNO::POISON_COLLISION, StackErrorI(STACK_ERRNO::POISON_COLLISION));
@@ -305,7 +305,7 @@ STACK_ERRNO StackDtorI(my_stack * stk) {
     size_t data_bytes  = malloc_size(stk->data);
     size_t stack_bytes = malloc_size(stk);
 
-    memset(stk->data, 0xDD, data_bytes);
+    memset(stk->data, 0xDD, data_bytes); // MENTOR норм ли засирать через memset
     free(stk->data);
     stk->data = NULL;
 
@@ -412,7 +412,7 @@ void StackDumpI_impl(my_stack * const stk, STACK_ERRNO stk_errno, const char * c
         canary_protection(printf("\t\t" YELLOW(" ") BRIGHT_GREEN("[0]") " = " BRIGHT_GREEN("%d") " [%#x] " BRIGHT_GREEN("(CANARY)\n"), stk->data[0], (unsigned) stk->data[0]);)
         for(size_t i = 0 canary_protection(+ 1); i < total_slots; ++i){
             if (i < stk->size canary_protection(+ 1)) {
-                printf("\t\t" BRIGHT_MAGENTA("*") BRIGHT_YELLOW("[%zu]") " = " BRIGHT_WHITE("%d") " [%#x]\n", i, stk->data[i], (unsigned) stk->data[i]);
+                printf("\t\t" BRIGHT_MAGENTA("*") BRIGHT_YELLOW("[%zu]") " = " BRIGHT_WHITE("%lg") " [%#x]\n", i, stk->data[i], stk->data[i]);
             } else if (i < stk->capacity canary_protection(+ 1)) {
                 printf("\t\t" YELLOW(" ") YELLOW("[%zu]") " = " YELLOW("%d") " [%#x] " BRIGHT_BLACK("(POISON)\n"), i, stk->data[i], (unsigned) stk->data[i]);
             } else if (i == stk->capacity canary_protection(+ 1)) {
